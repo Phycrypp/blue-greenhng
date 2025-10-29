@@ -1,0 +1,44 @@
+services:
+  app_blue:
+    image: ${BLUE_IMAGE}
+    platform: linux/amd64
+    environment:
+      RELEASE_ID: ${RELEASE_ID_BLUE}
+      APP_POOL: blue
+      PORT: ${PORT:-3000}
+    ports:
+      - "8081:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/healthz"]
+      interval: 3s
+      timeout: 1s
+      retries: 5
+
+  app_green:
+    image: ${GREEN_IMAGE}
+    platform: linux/amd64
+    environment:
+      RELEASE_ID: ${RELEASE_ID_GREEN}
+      APP_POOL: green
+      PORT: ${PORT:-3000}
+    ports:
+      - "8082:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/healthz"]
+      interval: 3s
+      timeout: 1s
+      retries: 5
+
+  nginx:
+    image: nginx:1.25-alpine
+    platform: linux/amd64
+    ports:
+      - "8080:80"
+    environment:
+      ACTIVE_POOL: ${ACTIVE_POOL}
+    depends_on:
+      - app_blue
+      - app_green
+    volumes:
+      - ./nginx/nginx.conf.template:/etc/nginx/nginx.conf.template:ro
+    command: ["/bin/sh","-c","set -eu; if [ \"${ACTIVE_POOL}\" = \"blue\" ]; then BLUE_FLAGS=''; GREEN_FLAGS=' backup'; else BLUE_FLAGS=' backup'; GREEN_FLAGS=''; fi; sed -e \"s/<<BLUE_FLAGS>>/${BLUE_FLAGS}/g\" -e \"s/<<GREEN_FLAGS>>/${GREEN_FLAGS}/g\" /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf; nginx -t; exec nginx -g 'daemon off;'"]

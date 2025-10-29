@@ -1,0 +1,4 @@
+- Primary/backup via Nginx `backup` on non-active pool using `ACTIVE_POOL`.
+- Fast failure detection: `max_fails=1 fail_timeout=2s` and tight proxy timeouts.
+- In-request retry to backup: `proxy_next_upstream` for error/timeout/5xx.
+- Headers forwarded unchanged.
