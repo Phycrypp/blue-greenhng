@@ -1,13 +1,27 @@
+version: "3.9"
+
 services:
+  nginx:
+    image: nginx:1.29.2
+    container_name: nginx
+    ports:
+      - "8080:80"                         # single public entry point
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app_blue
+      - app_green
+
   app_blue:
-    image: ${BLUE_IMAGE}
+    image: ${BLUE_IMAGE:-yimikaade/wonderful:devops-stage-two}
     platform: linux/amd64
+    container_name: app_blue
     environment:
-      RELEASE_ID: ${RELEASE_ID_BLUE}
+      RELEASE_ID: ${RELEASE_ID_BLUE:-blue-v1.0.0}
       APP_POOL: blue
       PORT: ${PORT:-3000}
-    ports:
-      - "8081:3000"
+    expose:
+      - "3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/healthz"]
       interval: 3s
@@ -15,30 +29,18 @@ services:
       retries: 5
 
   app_green:
-    image: ${GREEN_IMAGE}
+    image: ${GREEN_IMAGE:-yimikaade/wonderful:devops-stage-two}
     platform: linux/amd64
+    container_name: app_green
     environment:
-      RELEASE_ID: ${RELEASE_ID_GREEN}
+      RELEASE_ID: ${RELEASE_ID_GREEN:-green-v1.0.0}
       APP_POOL: green
       PORT: ${PORT:-3000}
-    ports:
-      - "8082:3000"
+    expose:
+      - "3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/healthz"]
       interval: 3s
       timeout: 1s
       retries: 5
 
-  nginx:
-    image: nginx:1.25-alpine
-    platform: linux/amd64
-    ports:
-      - "8080:80"
-    environment:
-      ACTIVE_POOL: ${ACTIVE_POOL}
-    depends_on:
-      - app_blue
-      - app_green
-    volumes:
-      - ./nginx/nginx.conf.template:/etc/nginx/nginx.conf.template:ro
-    command: ["/bin/sh","-c","set -eu; if [ \"${ACTIVE_POOL}\" = \"blue\" ]; then BLUE_FLAGS=''; GREEN_FLAGS=' backup'; else BLUE_FLAGS=' backup'; GREEN_FLAGS=''; fi; sed -e \"s/<<BLUE_FLAGS>>/${BLUE_FLAGS}/g\" -e \"s/<<GREEN_FLAGS>>/${GREEN_FLAGS}/g\" /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf; nginx -t; exec nginx -g 'daemon off;'"]
