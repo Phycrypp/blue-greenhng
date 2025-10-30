@@ -1,17 +1,24 @@
 version: "3.9"
 
 services:
+  # ===========================
+  # NGINX - Reverse Proxy
+  # ===========================
   nginx:
     image: nginx:1.29.2
     container_name: nginx
     ports:
-      - "8080:80"                         # single public entry point
+      - "8080:80"                         # Single public entry point
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_logs:/var/log/nginx         # <— shared log volume
     depends_on:
       - app_blue
       - app_green
 
+  # ===========================
+  # BLUE Service
+  # ===========================
   app_blue:
     image: ${BLUE_IMAGE:-yimikaade/wonderful:devops-stage-two}
     platform: linux/amd64
@@ -20,14 +27,17 @@ services:
       RELEASE_ID: ${RELEASE_ID_BLUE:-blue-v1.0.0}
       APP_POOL: blue
       PORT: ${PORT:-3000}
-    expose:
-      - "3000"
+    ports:
+      - "8081:3000"                       # Blue direct
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/healthz"]
       interval: 3s
       timeout: 1s
       retries: 5
 
+  # ===========================
+  # GREEN Service
+  # ===========================
   app_green:
     image: ${GREEN_IMAGE:-yimikaade/wonderful:devops-stage-two}
     platform: linux/amd64
@@ -36,11 +46,33 @@ services:
       RELEASE_ID: ${RELEASE_ID_GREEN:-green-v1.0.0}
       APP_POOL: green
       PORT: ${PORT:-3000}
-    expose:
-      - "3000"
+    ports:
+      - "8082:3000"                       # Green direct
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/healthz"]
       interval: 3s
       timeout: 1s
       retries: 5
+
+  # ===========================
+  # ALERT WATCHER
+  # ===========================
+  alert_watcher:
+  build: ./watcher
+  container_name: alert_watcher
+  env_file:
+    - .env
+  environment:
+    ACTIVE_POOL: ${ACTIVE_POOL:-blue}
+    ERROR_RATE_THRESHOLD: ${ERROR_RATE_THRESHOLD:-2}
+    WINDOW_SIZE: ${WINDOW_SIZE:-200}
+    ALERT_COOLDOWN_SEC: ${ALERT_COOLDOWN_SEC:-300}
+    MAINTENANCE_MODE: ${MAINTENANCE_MODE:-false}
+  volumes:
+    - nginx_logs:/var/log/nginx:ro
+  depends_on:
+    - nginx
+
+volumes:
+  nginx_logs:
 
